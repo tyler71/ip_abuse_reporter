@@ -1,0 +1,36 @@
+#!/bin/bash
+email_ip_sorted_file=$(mktemp)
+ip_log="$1"
+if [ ! -f "$ip_log" ]
+  then
+    echo "$ip_log" 'does not exist! Exiting'
+    exit 1
+fi
+
+# generate ip addresses into list of ipaddresses and their abuse email
+while read ip_address
+  do
+    whois_abuse_email=$(whois "$ip_address" | grep abuse | grep -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b" | head -n1)
+    if [ -n "$whois_abuse_email" ]
+      then
+        echo "$ip_address" "$whois_abuse_email" | tee --append "$email_ip_sorted_file"
+      else
+        echo No abuse email available for "$ip_address"
+    fi
+done < "$ip_log"
+
+# Grab abuse emails from list
+cut -f2 -d' ' "$email_ip_sorted_file" | sort | uniq > "$email_ip_sorted_file"_email_list
+
+
+while read abuse_email
+  do
+    email_sorted_ip_addresses=$(grep "$abuse_email" $email_ip_sorted_file | cut -f1 -d' ' | tr '\n' ' ')
+    message=$(echo "IP Addresses $email_sorted_ip_addresses is being used to post spam messages or is fraudulently attempting to login to sites. Please review network activity")
+    echo Will email "$abuse_email" - "$email_sorted_ip_addresses"
+
+#    echo "$message" | mail -s 'Abuse Notification' "$whois_abuse_email"
+#    sleep 1
+done < "$email_ip_sorted_file"_email_list
+
+rm "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
