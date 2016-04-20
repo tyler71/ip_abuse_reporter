@@ -19,6 +19,9 @@ if [ ! -f "$ip_log" ]
     echo "$ip_log" 'does not exist! Exiting'
     exit 1
 fi
+ip_log_converted=$(mktemp)
+sort -u $ip_log > "$ip_log_converted"
+
 
 # generate into list of ipaddresses and their abuse email from ip address list with whois
 while read ip_address
@@ -43,7 +46,7 @@ while read ip_address
         echo No abuse email available for $(cut -d' ' -f1 <<<"$ip_address")
     fi
     unset whois_abuse_email
-done < "$ip_log"
+done < "$ip_log_converted"
 echo ""
 
 # Grab abuse emails from list
@@ -64,4 +67,4 @@ while read abuse_email
     fi
 done < "$email_ip_sorted_file"_email_list
 
-rm "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
+rm "$ip_log_converted" "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
