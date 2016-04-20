@@ -99,7 +99,7 @@ while read abuse_email
         fi
 
 
-        echo -e "$message" | mail -s "$message_subject" ymnizi@objectmail.com # "$whois_abuse_email"
+        echo -e "$message" | mail -s "$message_subject" "$whois_abuse_email"
         sleep 1
     fi
 done < "$email_ip_sorted_file"_email_list
