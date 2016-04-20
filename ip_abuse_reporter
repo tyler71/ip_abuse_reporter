@@ -41,7 +41,7 @@ while read ip_address
     fi
     if [ -n "$whois_abuse_email" ]
       then
-        echo "$ip_address" "$whois_abuse_email" | tee --append "$email_ip_sorted_file"
+        echo "$(cut -d' ' -f1 <<<"$ip_address")" "$whois_abuse_email" | tee --append "$email_ip_sorted_file"
       else
         echo No abuse email available for $(cut -d' ' -f1 <<<"$ip_address")
     fi
@@ -52,6 +52,20 @@ echo ""
 # Grab abuse emails from list
 cut -f2 -d' ' "$email_ip_sorted_file" | sort | uniq > "$email_ip_sorted_file"_email_list
 
+if [ "${dry_run:-no}" != yes ]
+  then
+    echo Select abuse message
+    printf '1) SSH Logins \n'
+    printf '  Subject: SSH Login Abuse Notification - {IP_ADDRESS_COUNT} Addresses \n'
+    printf '  These ip addresses are being used to fraudulently attempt to login to my SSH server. Please review network activity \n'
+    printf '2) Spam Messages \n'
+    printf '  Subject: Spam Message Abuse Notification - {IP_ADDRESS_COUNT} Addresses \n'
+    printf '  These ip addresses are being used to post spam messages to comment boards / forums on my server. Please review network activity \n'
+    printf '3) Website Login \n'
+    printf '  Subject: Website Login Abuse Notification - {IP_ADDRESS_COUNT} Addresses \n'
+    printf '  These ip addresses are being used to attempt to fraudulently login to my blog. Please review network activity \n'
+    read -p '[123] ' abuse_selection
+fi
 
 while read abuse_email
   do
@@ -61,8 +75,28 @@ while read abuse_email
         echo Will email "$abuse_email" - "$email_sorted_ip_addresses"
       else
         echo Reported "$abuse_email" - "$email_sorted_ip_addresses"
-        message="$(echo "IP Addresses $email_sorted_ip_addresses is being used to post spam messages or is fraudulently attempting to login to site. Please review network activity")"
-        echo "$message" | mail -s 'Abuse Notification' "$whois_abuse_email"
+
+
+        if [ "$abuse_selection" == 1 ]
+          then
+            message_subject="SSH Login Abuse Notification - "$(wc -w <<<"$email_sorted_ip_addresses")" Addresses"
+            message=$(echo "These ip addresses are being used to fraudulently attempt to login to my SSH server. Please review network activity \n$(echo $email_sorted_ip_addresses | tr ' \t' '\n') \n")
+        elif [ "$abuse_selection" == 2 ]
+          then
+            message_subject="Spam Message Abuse Notification - "$(wc -w <<<"$email_sorted_ip_addresses")" Addresses"
+            message=$(echo "These ip addresses are being used to post spam messages to comment boards / forums on my server. Please review network activity \n$(echo $email_sorted_ip_addresses | tr ' \t' '\n') \n")
+        elif [ "$abuse_selection" == 3 ]
+          then
+            message_subject="Website Login Abuse Notification - "$(wc -w <<<"$email_sorted_ip_addresses")" Addresses"
+            message=$(echo "These ip addresses are being used to attempt to fraudulently login to my blog. Please review network activity \n$(echo $email_sorted_ip_addresses | tr ' \t' '\n') \n")
+        elif [ -z "$abuse_selection" ]
+          then
+            echo 'No Message set - Exiting'
+            exit 1
+        fi
+
+
+        echo -e "$message" | mail -s "$message_subject" "$whois_abuse_email"
         sleep 1
     fi
 done < "$email_ip_sorted_file"_email_list
