@@ -1,13 +1,26 @@
 #!/bin/bash
 email_ip_sorted_file=$(mktemp)
 ip_log="$1"
+
+while getopts "df:" opt; do
+  case "$opt" in
+    d)
+      dry_run=yes
+      ;;
+    f)
+      ip_log="$OPTARG"
+      ;;
+  esac
+done
+
+
 if [ ! -f "$ip_log" ]
   then
     echo "$ip_log" 'does not exist! Exiting'
     exit 1
 fi
 
-# generate into list of ip addresses and their abuse email from ip address list with whois
+# generate into list of ipaddresses and their abuse email from ip address list with whois
 while read ip_address
   do
     whois_abuse_email=$(whois "$ip_address" | grep abuse | grep -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b" | head -n1)
@@ -27,11 +40,15 @@ cut -f2 -d' ' "$email_ip_sorted_file" | sort | uniq > "$email_ip_sorted_file"_em
 while read abuse_email
   do
     email_sorted_ip_addresses="$(grep "$abuse_email" $email_ip_sorted_file | cut -f1 -d' ' | tr '\n' ' ')"
-    message="$(echo "IP Addresses $email_sorted_ip_addresses is being used to post spam messages or is fraudulently attempting to login to site. Please review network activity")"
-    echo Will email "$abuse_email" - "$email_sorted_ip_addresses"
-
-#    echo "$message" | mail -s 'Abuse Notification' "$whois_abuse_email"
-#    sleep 1
+    if [ "${dry_run:-no}" == yes ]
+      then
+        echo Will email "$abuse_email" - "$email_sorted_ip_addresses"
+      else
+        echo Reported "$abuse_email" - "$email_sorted_ip_addresses"
+        message="$(echo "IP Addresses $email_sorted_ip_addresses is being used to post spam messages or is fraudulently attempting to login to site. Please review network activity")"
+        echo "$message" | mail -s 'Abuse Notification' "$whois_abuse_email"
+        sleep 1
+    fi
 done < "$email_ip_sorted_file"_email_list
 
 rm "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
