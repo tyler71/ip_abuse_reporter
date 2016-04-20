@@ -19,18 +19,34 @@ if [ ! -f "$ip_log" ]
     echo "$ip_log" 'does not exist! Exiting'
     exit 1
 fi
+ip_log_converted=$(mktemp)
+sort -u $ip_log > "$ip_log_converted"
+
 
 # generate into list of ipaddresses and their abuse email from ip address list with whois
 while read ip_address
   do
-    whois_abuse_email=$(whois "$ip_address" | grep abuse | grep -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b" | head -n1)
+    echo $ip_address | egrep -q -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b|null"
+    if [ $? == 0 ]
+      then
+        whois_abuse_email=$(echo $ip_address | grep -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b")
+      else
+        whois_abuse_email=$(whois "$(echo $ip_address | cut -d' ' -f1)" | grep abuse | grep -E -o "\b[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b" | head -n1)
+        if [ -n "$whois_abuse_email" ]
+          then
+            sed -i "s:$ip_address:$ip_address $whois_abuse_email:g" "$ip_log"
+          else
+            sed -i "s:$ip_address:$ip_address null:g" "$ip_log"
+        fi
+    fi
     if [ -n "$whois_abuse_email" ]
       then
         echo "$ip_address" "$whois_abuse_email" | tee --append "$email_ip_sorted_file"
       else
-        echo No abuse email available for "$ip_address"
+        echo No abuse email available for $(cut -d' ' -f1 <<<"$ip_address")
     fi
-done < "$ip_log"
+    unset whois_abuse_email
+done < "$ip_log_converted"
 echo ""
 
 # Grab abuse emails from list
@@ -51,4 +67,4 @@ while read abuse_email
     fi
 done < "$email_ip_sorted_file"_email_list
 
-rm "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
+rm "$ip_log_converted" "$email_ip_sorted_file" "$email_ip_sorted_file"_email_list
